@@ -44,7 +44,7 @@ class ActiveAircraft(AircraftModelBase):
     seats: int
     serial: str
     registrant_name: str
-    registrant_county: str
+    registrant_county: Optional[str]
 
 
 @dataclass
