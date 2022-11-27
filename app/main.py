@@ -89,29 +89,40 @@ class AircraftAggregate:
     loaded_data: List[AircraftManufacturerAggregate]
 
 
-def load_data(data_dir: str) -> Dict[str, pd.DataFrame]:
-    df_dict: Dict[str, pd.DataFrame] = dict()
-    for file in os.scandir(data_dir):
-        if not file.is_file():
-            continue
+class DataProvider:
+    def __init__(self, data_dir: str) -> None:
+        self._load_data(data_dir)
 
-        file_path = Path(file)
-        if file_path.suffix != ".parquet":
-            continue
+    def _load_data(self, data_dir: str) -> Dict[str, pd.DataFrame]:
+        df_dict: Dict[str, pd.DataFrame] = dict()
+        for file in os.scandir(data_dir):
+            if not file.is_file():
+                continue
 
-        df_dict[file_path.stem] = pd.read_parquet(file_path)
+            file_path = Path(file)
+            if file_path.suffix != ".parquet":
+                continue
 
-    return df_dict
+            df_dict[file_path.stem] = pd.read_parquet(file_path)
+
+        self._df_dict = df_dict
+
+    def get_available_datasets(self) -> List[str]:
+        return self._df_dict.keys()
+
+    def get_dataset(self, dataset: str) -> pd.DataFrame:
+        return self._df_dict[dataset]
 
 
-faa_data = load_data(DATA_DIR)
+provider = DataProvider(DATA_DIR)
 app = FastAPI()
 
 
 @app.get("/loaded_data", response_model=DataFrameSummaryList)
 def get_loaded_data():
     loaded_data: List[pd.DataFrame] = list()
-    for name, df in faa_data.items():
+    for name in provider.get_available_datasets():
+        df = provider.get_dataset(name)
         df_summary = DataFrameSummary(name, df.columns.to_list(), len(df))
         loaded_data.append(df_summary)
     return DataFrameSummaryList(len(loaded_data), loaded_data)
@@ -119,9 +130,8 @@ def get_loaded_data():
 
 @app.get("/aircraft_models", response_model=AircraftModelList)
 def get_aircraft_models(skip: int = 0, limit: int = 100):
-    df = faa_data["aircraft_models"][
-        ["manufacturer", "model", "seats"]
-    ].drop_duplicates()
+    df_cols = ["manufacturer", "model", "seats"]
+    df = provider.get_dataset("aircraft_models")[df_cols].drop_duplicates()
 
     all_models = list(map(lambda row: AircraftModel(*row), df.values.tolist()))
     return AircraftModelList(len(all_models), all_models[skip : skip + limit])
@@ -131,14 +141,12 @@ def get_aircraft_models(skip: int = 0, limit: int = 100):
 def get_aircrafts_by_manufacturer_and_model(
     model: Optional[str] = None, manufacturer: Optional[str] = None
 ):
-    air_df = faa_data["aircraft"][
-        ["aircraft_serial", "aircraft_model_code", "name", "county", "status_code"]
-    ]
+    air_df_cols = ["aircraft_serial", "aircraft_model_code", "name", "county", "status_code"]
+    air_df = provider.get_dataset("aircraft")[air_df_cols]
     air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
 
-    model_df = faa_data["aircraft_models"][
-        ["aircraft_model_code", "manufacturer", "model", "seats"]
-    ]
+    model_df_cols = ["aircraft_model_code", "manufacturer", "model", "seats"]
+    model_df = provider.get_dataset("aircraft_models")[model_df_cols]
 
     if model and manufacturer:
         model_df = model_df[
@@ -172,12 +180,12 @@ def recursive_dictify(df: pd.DataFrame):
 @app.get("/agg_active_aircrafts", response_model=AircraftAggregate)
 def get_aggregated_active_aircrafts():
     # Returns nested objects (groupby)
-    air_df_col = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
-    air_df = faa_data["aircraft"][air_df_col]
+    air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
+    air_df = provider.get_dataset("aircraft")[air_df_cols]
     air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
 
-    model_df_col = ["aircraft_model_code", "manufacturer", "model"]
-    model_df = faa_data["aircraft_models"][model_df_col]
+    model_df_cols = ["aircraft_model_code", "manufacturer", "model"]
+    model_df = provider.get_dataset("aircraft_models")[model_df_cols]
     model_df.set_index("aircraft_model_code", inplace=True)
 
     merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
@@ -197,11 +205,11 @@ def get_aggregated_active_aircrafts():
 def get_aggregated_active_aircrafts2():
     # Version which returns list of records
     air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
-    air_df = faa_data["aircraft"][air_df_cols]
+    air_df = provider.get_dataset("aircraft")[air_df_cols]
     air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
 
     model_df_cols = ["aircraft_model_code", "manufacturer", "model"]
-    model_df = faa_data["aircraft_models"][model_df_cols]
+    model_df = provider.get_dataset("aircraft_models")[model_df_cols]
     model_df.set_index("aircraft_model_code", inplace=True)
 
     merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
@@ -222,11 +230,11 @@ def get_aggregated_active_aircrafts2():
 @app.get("/active_aircrafts_pivot")
 def get_active_aircrafts_pivot():
     air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
-    air_df = faa_data["aircraft"][air_df_cols]
+    air_df = provider.get_dataset("aircraft")[air_df_cols]
     air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
 
     model_df_cols = ["aircraft_model_code", "manufacturer", "model"]
-    model_df = faa_data["aircraft_models"][model_df_cols]
+    model_df = provider.get_dataset("aircraft_models")[model_df_cols]
     model_df.set_index("aircraft_model_code", inplace=True)
 
     merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
