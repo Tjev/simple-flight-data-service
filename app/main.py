@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
 DATA_DIR = "faa_data/"
 
@@ -114,12 +114,16 @@ class DataProvider:
         return self._df_dict[dataset]
 
 
-provider = DataProvider(DATA_DIR)
 app = FastAPI()
 
 
+def get_data_provider():
+    provider = DataProvider(DATA_DIR)
+    yield provider
+
+
 @app.get("/loaded_data", response_model=DataFrameSummaryList)
-def get_loaded_data():
+def get_loaded_data(provider: DataProvider = Depends(get_data_provider)):
     loaded_data: List[pd.DataFrame] = list()
     for name in provider.get_available_datasets():
         df = provider.get_dataset(name)
@@ -129,7 +133,7 @@ def get_loaded_data():
 
 
 @app.get("/aircraft_models", response_model=AircraftModelList)
-def get_aircraft_models(skip: int = 0, limit: int = 100):
+def get_aircraft_models(skip: int = 0, limit: int = 100, provider: DataProvider = Depends(get_data_provider)):
     df_cols = ["manufacturer", "model", "seats"]
     df = provider.get_dataset("aircraft_models")[df_cols].drop_duplicates()
 
@@ -139,7 +143,7 @@ def get_aircraft_models(skip: int = 0, limit: int = 100):
 
 @app.get("/active_aircrafts", response_model=ActiveAircraftList)
 def get_aircrafts_by_manufacturer_and_model(
-    model: Optional[str] = None, manufacturer: Optional[str] = None
+    model: Optional[str] = None, manufacturer: Optional[str] = None, provider: DataProvider = Depends(get_data_provider)
 ):
     air_df_cols = ["aircraft_serial", "aircraft_model_code", "name", "county", "status_code"]
     air_df = provider.get_dataset("aircraft")[air_df_cols]
@@ -178,7 +182,7 @@ def recursive_dictify(df: pd.DataFrame):
 
 
 @app.get("/agg_active_aircrafts", response_model=AircraftAggregate)
-def get_aggregated_active_aircrafts():
+def get_aggregated_active_aircrafts(provider: DataProvider = Depends(get_data_provider)):
     # Returns nested objects (groupby)
     air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
     air_df = provider.get_dataset("aircraft")[air_df_cols]
@@ -191,18 +195,14 @@ def get_aggregated_active_aircrafts():
     merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
     merged_df.drop("aircraft_model_code", axis=1, inplace=True)
 
-    counts_df = (
-        merged_df.groupby(["manufacturer", "model", "county"])
-        .size()
-        .reset_index(name="count")
-    )
+    counts_df = merged_df.groupby(["manufacturer", "model", "county"]).size().reset_index(name="count")
 
     res = recursive_dictify(counts_df)
     return AircraftAggregate(len(res), res)
 
 
 @app.get("/agg_active_aircrafts2", response_model=ActiveAircraftCountList)
-def get_aggregated_active_aircrafts2():
+def get_aggregated_active_aircrafts2(provider: DataProvider = Depends(get_data_provider)):
     # Version which returns list of records
     air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
     air_df = provider.get_dataset("aircraft")[air_df_cols]
@@ -215,20 +215,14 @@ def get_aggregated_active_aircrafts2():
     merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
     merged_df.drop("aircraft_model_code", axis=1, inplace=True)
 
-    counts_df = (
-        merged_df.groupby(["manufacturer", "model", "county"])
-        .size()
-        .reset_index(name="count")
-    )
+    counts_df = merged_df.groupby(["manufacturer", "model", "county"]).size().reset_index(name="count")
 
-    all_active = list(
-        map(lambda row: ActiveAircraftCount(*row), counts_df.values.tolist())
-    )
+    all_active = list(map(lambda row: ActiveAircraftCount(*row), counts_df.values.tolist()))
     return ActiveAircraftCountList(len(all_active), all_active)
 
 
 @app.get("/active_aircrafts_pivot")
-def get_active_aircrafts_pivot():
+def get_active_aircrafts_pivot(provider: DataProvider = Depends(get_data_provider)):
     air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
     air_df = provider.get_dataset("aircraft")[air_df_cols]
     air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
