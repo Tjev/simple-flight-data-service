@@ -1,18 +1,19 @@
 from fastapi.testclient import TestClient
 
-from app.main import DataProvider, app, get_data_provider
+from app.main import DataProcessor, DataProvider, app, get_data_processor
 
 MOCK_DATA_DIR = "tests/mock_data"
 
 
-def get_mocked_data_provider():
+def get_mocked_data_processor():
     provider = DataProvider(MOCK_DATA_DIR)
-    yield provider
+    processor = DataProcessor(provider)
+    yield processor
 
 
 class TestAPIEndpoints:
     client = TestClient(app)
-    app.dependency_overrides[get_data_provider] = get_mocked_data_provider
+    app.dependency_overrides[get_data_processor] = get_mocked_data_processor
 
     def _assert_status_ok(self, response):
         assert response.status_code == 200
