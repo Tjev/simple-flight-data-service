@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from fastapi import Depends, FastAPI
@@ -87,6 +87,12 @@ class AircraftManufacturerAggregate:
 class AircraftAggregate:
     count: int
     loaded_data: List[AircraftManufacturerAggregate]
+
+
+@dataclass
+class ActiveAircraftsPivot:
+    count: int
+    loaded_data: List[List[Any]]
 
 
 class DataProvider:
@@ -244,4 +250,6 @@ def get_active_aircrafts_pivot(provider: DataProvider = Depends(get_data_provide
     # This return separated columns and rows...
     # return {"columns": pivot.columns.to_list(), "data": pivot.values.tolist()}
 
-    return {"data": [pivot.columns.to_list(), *pivot.values.tolist()]}
+    data = [pivot.columns.to_list(), *pivot.values.tolist()]
+    # return {"count": len(data), "loaded_data": data}
+    return ActiveAircraftsPivot(len(data), data)

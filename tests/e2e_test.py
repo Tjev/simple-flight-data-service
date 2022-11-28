@@ -205,7 +205,8 @@ class TestAPIEndpoints:
         response = self.client.get("/active_aircrafts_pivot")
         self._assert_status_ok(response)
         expected = {
-            "data": [
+            "count": 5,
+            "loaded_data": [
                 [ "manufacturer", "model", "001", "002", "003", "999" ],
                 [ "Dicks", "samolot", "NULL", "NULL", 1, "NULL" ],
                 [ "Georges", "letoun", "NULL", 1, "NULL", "NULL" ],
