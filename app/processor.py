@@ -49,6 +49,19 @@ class DataProcessor:
         all_active = list(map(lambda row: schemas.ActiveAircraft(*row), merged_df.values.tolist()))
         return all_active
 
+    def _get_merged_df_for_agg(self) -> pd.DataFrame:
+        air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
+        air_df = self._provider.get_dataset("aircraft")[air_df_cols]
+        air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
+
+        model_df_cols = ["aircraft_model_code", "manufacturer", "model"]
+        model_df = self._provider.get_dataset("aircraft_models")[model_df_cols]
+        model_df.set_index("aircraft_model_code", inplace=True)
+
+        merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
+        merged_df.drop("aircraft_model_code", axis=1, inplace=True)
+        return merged_df
+
     def _recursive_jsonify(self, df: pd.DataFrame) -> Any:
         if len(df.columns) == 1:
             if df.values.size == 1:
@@ -61,16 +74,7 @@ class DataProcessor:
 
     def get_aggregated_active_aircrafts(self) -> Any:
         # Returns nested objects (groupby)
-        air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
-        air_df = self._provider.get_dataset("aircraft")[air_df_cols]
-        air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
-
-        model_df_cols = ["aircraft_model_code", "manufacturer", "model"]
-        model_df = self._provider.get_dataset("aircraft_models")[model_df_cols]
-        model_df.set_index("aircraft_model_code", inplace=True)
-
-        merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
-        merged_df.drop("aircraft_model_code", axis=1, inplace=True)
+        merged_df = self._get_merged_df_for_agg()
 
         counts_df = merged_df.groupby(["manufacturer", "model", "county"]).size().reset_index(name="count")
 
@@ -79,16 +83,7 @@ class DataProcessor:
 
     def get_aggregated_active_aircrafts2(self) -> List[schemas.ActiveAircraftCount]:
         # Version which returns list of records
-        air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
-        air_df = self._provider.get_dataset("aircraft")[air_df_cols]
-        air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
-
-        model_df_cols = ["aircraft_model_code", "manufacturer", "model"]
-        model_df = self._provider.get_dataset("aircraft_models")[model_df_cols]
-        model_df.set_index("aircraft_model_code", inplace=True)
-
-        merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
-        merged_df.drop("aircraft_model_code", axis=1, inplace=True)
+        merged_df = self._get_merged_df_for_agg()
 
         counts_df = merged_df.groupby(["manufacturer", "model", "county"]).size().reset_index(name="count")
 
@@ -96,16 +91,7 @@ class DataProcessor:
         return all_active
 
     def get_active_aircrafts_pivot(self) -> List[Any]:
-        air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
-        air_df = self._provider.get_dataset("aircraft")[air_df_cols]
-        air_df = air_df[air_df.status_code == "A"].drop("status_code", axis=1)
-
-        model_df_cols = ["aircraft_model_code", "manufacturer", "model"]
-        model_df = self._provider.get_dataset("aircraft_models")[model_df_cols]
-        model_df.set_index("aircraft_model_code", inplace=True)
-
-        merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
-        merged_df.drop("aircraft_model_code", axis=1, inplace=True)
+        merged_df = self._get_merged_df_for_agg()
 
         pivot = merged_df.pivot_table(
             "aircraft_serial",
