@@ -93,7 +93,7 @@ class DataProvider:
     def __init__(self, data_dir: str) -> None:
         self._load_data(data_dir)
 
-    def _load_data(self, data_dir: str) -> Dict[str, pd.DataFrame]:
+    def _load_data(self, data_dir: str) -> None:
         df_dict: Dict[str, pd.DataFrame] = dict()
         for file in os.scandir(data_dir):
             if not file.is_file():
@@ -108,7 +108,7 @@ class DataProvider:
         self._df_dict = df_dict
 
     def get_available_datasets(self) -> List[str]:
-        return self._df_dict.keys()
+        return list(self._df_dict.keys())
 
     def get_dataset(self, dataset: str) -> pd.DataFrame:
         return self._df_dict[dataset]
@@ -124,7 +124,7 @@ def get_data_provider():
 
 @app.get("/loaded_data", response_model=DataFrameSummaryList)
 def get_loaded_data(provider: DataProvider = Depends(get_data_provider)):
-    loaded_data: List[pd.DataFrame] = list()
+    loaded_data: List[DataFrameSummary] = list()
     for name in provider.get_available_datasets():
         df = provider.get_dataset(name)
         df_summary = DataFrameSummary(name, df.columns.to_list(), len(df))
@@ -153,9 +153,7 @@ def get_aircrafts_by_manufacturer_and_model(
     model_df = provider.get_dataset("aircraft_models")[model_df_cols]
 
     if model and manufacturer:
-        model_df = model_df[
-            (model_df.model == model) & (model_df.manufacturer == manufacturer)
-        ]
+        model_df = model_df[(model_df.model == model) & (model_df.manufacturer == manufacturer)]
     elif model:
         model_df = model_df[model_df.model == model]
     elif manufacturer:
