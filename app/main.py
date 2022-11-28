@@ -1,98 +1,13 @@
 import os
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 from fastapi import Depends, FastAPI
 
+from . import schemas
+
 DATA_DIR = "faa_data/"
-
-
-@dataclass
-class DataFrameSummary:
-    name: str
-    columns: List[str]
-    rows_count: int
-
-
-@dataclass
-class DataFrameSummaryList:
-    count: int
-    loaded_data: List[DataFrameSummary]
-
-
-@dataclass
-class AircraftModelBase:
-    manufacturer: str
-    model: str
-
-
-@dataclass
-class AircraftModel(AircraftModelBase):
-    seats: int
-
-
-@dataclass
-class AircraftModelList:
-    count: int
-    loaded_data: List[AircraftModel]
-
-
-@dataclass
-class ActiveAircraft(AircraftModelBase):
-    seats: int
-    serial: str
-    registrant_name: str
-    registrant_county: Optional[str]
-
-
-@dataclass
-class ActiveAircraftList:
-    count: int
-    loaded_data: List[ActiveAircraft]
-
-
-@dataclass
-class ActiveAircraftCount(AircraftModelBase):
-    registrant_county: str
-    count: int
-
-
-@dataclass
-class ActiveAircraftCountList:
-    count: int
-    loaded_data: List[ActiveAircraftCount]
-
-
-@dataclass
-class AircraftCountyAggregate:
-    county: str
-    agg: int
-
-
-@dataclass
-class AircraftModelAggregate:
-    model: str
-    agg: List[AircraftCountyAggregate]
-
-
-@dataclass
-class AircraftManufacturerAggregate:
-    manufacturer: str
-    agg: List[AircraftModelAggregate]
-
-
-@dataclass
-class AircraftAggregate:
-    count: int
-    loaded_data: List[AircraftManufacturerAggregate]
-
-
-@dataclass
-class ActiveAircraftsPivot:
-    count: int
-    loaded_data: List[List[Any]]
 
 
 class DataProvider:
@@ -128,26 +43,26 @@ def get_data_provider():
     yield provider
 
 
-@app.get("/loaded_data", response_model=DataFrameSummaryList)
+@app.get("/loaded_data", response_model=schemas.DataFrameSummaryList)
 def get_loaded_data(provider: DataProvider = Depends(get_data_provider)):
-    loaded_data: List[DataFrameSummary] = list()
+    loaded_data: List[schemas.DataFrameSummary] = list()
     for name in provider.get_available_datasets():
         df = provider.get_dataset(name)
-        df_summary = DataFrameSummary(name, df.columns.to_list(), len(df))
+        df_summary = schemas.DataFrameSummary(name, df.columns.to_list(), len(df))
         loaded_data.append(df_summary)
-    return DataFrameSummaryList(len(loaded_data), loaded_data)
+    return schemas.DataFrameSummaryList(len(loaded_data), loaded_data)
 
 
-@app.get("/aircraft_models", response_model=AircraftModelList)
+@app.get("/aircraft_models", response_model=schemas.AircraftModelList)
 def get_aircraft_models(skip: int = 0, limit: int = 100, provider: DataProvider = Depends(get_data_provider)):
     df_cols = ["manufacturer", "model", "seats"]
     df = provider.get_dataset("aircraft_models")[df_cols].drop_duplicates()
 
-    all_models = list(map(lambda row: AircraftModel(*row), df.values.tolist()))
-    return AircraftModelList(len(all_models), all_models[skip : skip + limit])
+    all_models = list(map(lambda row: schemas.AircraftModel(*row), df.values.tolist()))
+    return schemas.AircraftModelList(len(all_models), all_models[skip : skip + limit])
 
 
-@app.get("/active_aircrafts", response_model=ActiveAircraftList)
+@app.get("/active_aircrafts", response_model=schemas.ActiveAircraftList)
 def get_aircrafts_by_manufacturer_and_model(
     model: Optional[str] = None, manufacturer: Optional[str] = None, provider: DataProvider = Depends(get_data_provider)
 ):
@@ -170,8 +85,8 @@ def get_aircrafts_by_manufacturer_and_model(
     merged_df = model_df.merge(air_df, right_on="aircraft_model_code", left_index=True)
     merged_df.drop("aircraft_model_code", axis=1, inplace=True)
 
-    all_active = list(map(lambda row: ActiveAircraft(*row), merged_df.values.tolist()))
-    return ActiveAircraftList(len(all_active), all_active)
+    all_active = list(map(lambda row: schemas.ActiveAircraft(*row), merged_df.values.tolist()))
+    return schemas.ActiveAircraftList(len(all_active), all_active)
 
 
 def recursive_dictify(df: pd.DataFrame):
@@ -185,7 +100,7 @@ def recursive_dictify(df: pd.DataFrame):
     return d
 
 
-@app.get("/agg_active_aircrafts", response_model=AircraftAggregate)
+@app.get("/agg_active_aircrafts", response_model=schemas.AircraftAggregate)
 def get_aggregated_active_aircrafts(provider: DataProvider = Depends(get_data_provider)):
     # Returns nested objects (groupby)
     air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
@@ -202,10 +117,10 @@ def get_aggregated_active_aircrafts(provider: DataProvider = Depends(get_data_pr
     counts_df = merged_df.groupby(["manufacturer", "model", "county"]).size().reset_index(name="count")
 
     res = recursive_dictify(counts_df)
-    return AircraftAggregate(len(res), res)
+    return schemas.AircraftAggregate(len(res), res)
 
 
-@app.get("/agg_active_aircrafts2", response_model=ActiveAircraftCountList)
+@app.get("/agg_active_aircrafts2", response_model=schemas.ActiveAircraftCountList)
 def get_aggregated_active_aircrafts2(provider: DataProvider = Depends(get_data_provider)):
     # Version which returns list of records
     air_df_cols = ["aircraft_serial", "aircraft_model_code", "county", "status_code"]
@@ -221,8 +136,8 @@ def get_aggregated_active_aircrafts2(provider: DataProvider = Depends(get_data_p
 
     counts_df = merged_df.groupby(["manufacturer", "model", "county"]).size().reset_index(name="count")
 
-    all_active = list(map(lambda row: ActiveAircraftCount(*row), counts_df.values.tolist()))
-    return ActiveAircraftCountList(len(all_active), all_active)
+    all_active = list(map(lambda row: schemas.ActiveAircraftCount(*row), counts_df.values.tolist()))
+    return schemas.ActiveAircraftCountList(len(all_active), all_active)
 
 
 @app.get("/active_aircrafts_pivot")
@@ -252,4 +167,4 @@ def get_active_aircrafts_pivot(provider: DataProvider = Depends(get_data_provide
 
     data = [pivot.columns.to_list(), *pivot.values.tolist()]
     # return {"count": len(data), "loaded_data": data}
-    return ActiveAircraftsPivot(len(data), data)
+    return schemas.ActiveAircraftsPivot(len(data), data)
