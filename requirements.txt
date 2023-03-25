@@ -1,7 +1,7 @@
 fastapi[all]==0.88.0
 pandas==1.5.2
 pyarrow==10.0.1
-sqlalchemy
+sqlalchemy<2.0
 psycopg2-binary
 psycopg2
 

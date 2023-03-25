@@ -5,7 +5,7 @@ FROM python:3.9
 
 WORKDIR /code
 
-RUN apt install libpq-dev python3-dev
+RUN apt install libpq-dev
 
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
