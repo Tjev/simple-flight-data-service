@@ -18,6 +18,6 @@ echo ""
 dataDir="faa_data/"
 
 docker run --rm -d \
-    -p 8000:8000 \
+    -p 80:80 \
     -v `pwd`/$dataDir:/code/$dataDir:ro \
     sfd_service
