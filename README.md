@@ -12,7 +12,7 @@ docker build --rm -t sdf_service .
 ```
 
 
-Then simply run the `run_app.sh`.
+Then simply run the `run_app.sh`. 
 
 The service API will be then available at `http://localhost:8000/`.
 
